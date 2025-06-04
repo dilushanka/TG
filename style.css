@@ -1,0 +1,53 @@
+body {
+    font-family: sans-serif;
+    background-color: #f8f9fa;
+}
+
+#temperedGlassContainer .card {
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: transform .2s;
+}
+
+#temperedGlassContainer .card:hover {
+    transform: scale(1.03);
+}
+
+.card-title {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.card-text {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.price {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.stock {
+    color: #17a2b8;
+}
+
+/* Ensure 5 cards per row on larger screens */
+@media (min-width: 992px) { /* Large devices (desktops, 992px and up) */
+    #temperedGlassContainer .col-lg-custom {
+        flex: 0 0 20%;
+        max-width: 20%;
+    }
+}
+@media (min-width: 768px) and (max-width: 991.98px) { /* Medium devices (tablets, 768px and up) */
+    #temperedGlassContainer .col-md-custom {
+        flex: 0 0 33.3333%;
+        max-width: 33.3333%;
+    }
+}
+@media (max-width: 767.98px) { /* Small devices (landscape phones, less than 768px) */
+    #temperedGlassContainer .col-sm-custom {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
