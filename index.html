@@ -7,7 +7,10 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://apis.google.com/js/api.js"></script>
+    
+    <!-- Fixed: Added Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <style>
         :root {
             --primary: #4361ee;
@@ -648,6 +651,12 @@
 
         // Initialize Google API
         function initGoogleAPI() {
+            // Check if gapi is loaded
+            if (typeof gapi === 'undefined') {
+                console.error('Google API not loaded');
+                return;
+            }
+            
             gapi.load('client:auth2', function() {
                 gapi.client.init({
                     apiKey: CONFIG.apiKey,
@@ -666,6 +675,10 @@
                     
                     // Add click handler for logout button
                     document.getElementById('logoutButton').addEventListener('click', handleSignoutClick);
+                }, function(error) {
+                    console.error('Google API initialization error:', error);
+                    // Show error message to user
+                    document.getElementById('loginButton').innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Login Failed - Click to Retry';
                 });
             });
         }
@@ -676,6 +689,7 @@
                 document.getElementById('loginScreen').classList.add('d-none');
                 document.getElementById('dashboard').classList.remove('d-none');
                 loadSheetData();
+                createStockChart(); // Create chart after login
             } else {
                 document.getElementById('loginScreen').classList.remove('d-none');
                 document.getElementById('dashboard').classList.add('d-none');
@@ -718,45 +732,14 @@
             console.log('Updating UI with sheet data');
         }
 
-        // Quantity controls
-        document.getElementById('increaseQty').addEventListener('click', function() {
-            const input = document.getElementById('orderQuantity');
-            input.value = parseInt(input.value) + 1;
-        });
-
-        document.getElementById('decreaseQty').addEventListener('click', function() {
-            const input = document.getElementById('orderQuantity');
-            if (parseInt(input.value) > 1) {
-                input.value = parseInt(input.value) - 1;
-            }
-        });
-
-        // Place order
-        document.getElementById('confirmOrder').addEventListener('click', function() {
-            const quantity = document.getElementById('orderQuantity').value;
-            alert(`Order placed for ${quantity} units! Stock will be updated.`);
-            
-            // In a real implementation, you would update the Google Sheet here
-            // updateStockInSheet(itemId, quantity);
-            
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('orderModal'));
-            modal.hide();
-        });
-
-        // Search functionality
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            console.log(`Searching for: ${searchTerm}`);
-            // In a real implementation, you would filter the displayed items
-        });
-
-        // Initialize Google API on load
-        window.addEventListener('load', function() {
-            initGoogleAPI();
-            
-            // Simple chart for demo purposes
+        // Create stock chart
+        function createStockChart() {
             const ctx = document.getElementById('stockChart').getContext('2d');
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js not loaded');
+                return;
+            }
+            
             const gradient = ctx.createLinearGradient(0, 0, 0, 250);
             gradient.addColorStop(0, 'rgba(67, 97, 238, 0.5)');
             gradient.addColorStop(1, 'rgba(67, 97, 238, 0.1)');
@@ -797,6 +780,55 @@
                     }
                 }
             });
+        }
+
+        // Quantity controls
+        document.getElementById('increaseQty').addEventListener('click', function() {
+            const input = document.getElementById('orderQuantity');
+            input.value = parseInt(input.value) + 1;
+        });
+
+        document.getElementById('decreaseQty').addEventListener('click', function() {
+            const input = document.getElementById('orderQuantity');
+            if (parseInt(input.value) > 1) {
+                input.value = parseInt(input.value) - 1;
+            }
+        });
+
+        // Place order
+        document.getElementById('confirmOrder').addEventListener('click', function() {
+            const quantity = document.getElementById('orderQuantity').value;
+            alert(`Order placed for ${quantity} units! Stock will be updated.`);
+            
+            // In a real implementation, you would update the Google Sheet here
+            // updateStockInSheet(itemId, quantity);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('orderModal'));
+            modal.hide();
+        });
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            console.log(`Searching for: ${searchTerm}`);
+            // In a real implementation, you would filter the displayed items
+        });
+
+        // Initialize Google API on load
+        window.addEventListener('load', function() {
+            // Load Google API script dynamically
+            const script = document.createElement('script');
+            script.src = 'https://apis.google.com/js/api.js';
+            script.onload = initGoogleAPI;
+            script.onerror = function() {
+                console.error('Failed to load Google API script');
+                document.getElementById('loginButton').innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Failed to Load - Click to Retry';
+                document.getElementById('loginButton').addEventListener('click', function() {
+                    window.location.reload();
+                });
+            };
+            document.head.appendChild(script);
         });
     </script>
 </body>
