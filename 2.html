@@ -642,194 +642,275 @@
 
     <script>
         // Google Sheets Configuration
-        const CONFIG = {
-            clientId: '80785123608-hebadvt7k7pcjnthnvkbtodc9i328le0.apps.googleusercontent.com',
-            spreadsheetId: '1okznadJPiXLygebie8jLStKPF6WUoDsrqqDAFogLS7o',
-            apiKey: 'AIzaSyBtIb_OEZXjsex6BlPZsk35ISO3CVKV2io',
-            sheetName: 'TG2'
-        };
+const CONFIG = {
+    clientId: '80785123608-hebadvt7k7pcjnthnvkbtodc9i328le0.apps.googleusercontent.com', // Make sure this is your actual Client ID
+    spreadsheetId: '1okznadJPiXLygebie8jLStKPF6WUoDsrqqDAFogLS7o', // Make sure this is your actual Spreadsheet ID
+    apiKey: 'AIzaSyAW4m-BcEz5ODvkA--BGEyj1B4KwbttSn4', // Make sure this is your actual API Key
+    sheetName: 'TG2' // Make sure this is your actual Sheet Name
+};
 
-        // Initialize Google API
-        function initGoogleAPI() {
-            // Check if gapi is loaded
-            if (typeof gapi === 'undefined') {
-                console.error('Google API not loaded');
-                return;
+// Initialize Google API
+function initGoogleAPI() {
+    // Check if gapi is loaded
+    if (typeof gapi === 'undefined') {
+        console.error('Google API (gapi) object not loaded. The api.js script may have failed to load or is blocked.');
+        const loginButton = document.getElementById('loginButton');
+        if (loginButton) {
+            loginButton.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i> GAPI Load Failed - Retry';
+        }
+        return;
+    }
+
+    gapi.load('client:auth2', function() {
+        // Check if gapi.client is available after loading 'client:auth2'
+        if (typeof gapi.client === 'undefined') {
+            console.error('gapi.client is undefined. Google Client library might not have loaded correctly.');
+            const loginButton = document.getElementById('loginButton');
+            if (loginButton) {
+                loginButton.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>GAPI Client Failed - Retry';
+            }
+            return;
+        }
+        
+        gapi.client.init({
+            apiKey: CONFIG.apiKey,
+            clientId: CONFIG.clientId,
+            discoveryDocs: ["https://sheets.googleapis.com/$discovery/rest?version=v4"],
+            scope: "https://www.googleapis.com/auth/spreadsheets"
+        }).then(function() {
+            // Listen for sign-in state changes
+            gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+            
+            // Handle initial sign-in state
+            updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+            
+            // Add click handler for login button (ensure it's only added once)
+            const loginButton = document.getElementById('loginButton');
+            if (loginButton && !loginButton.dataset.listenerAttached) {
+                loginButton.addEventListener('click', handleAuthClick);
+                loginButton.dataset.listenerAttached = 'true'; // Mark as attached
             }
             
-            gapi.load('client:auth2', function() {
-                gapi.client.init({
-                    apiKey: CONFIG.apiKey,
-                    clientId: CONFIG.clientId,
-                    discoveryDocs: ["https://sheets.googleapis.com/$discovery/rest?version=v4"],
-                    scope: "https://www.googleapis.com/auth/spreadsheets"
-                }).then(function() {
-                    // Listen for sign-in state changes
-                    gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
-                    
-                    // Handle initial sign-in state
-                    updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
-                    
-                    // Add click handler for login button
-                    document.getElementById('loginButton').addEventListener('click', handleAuthClick);
-                    
-                    // Add click handler for logout button
-                    document.getElementById('logoutButton').addEventListener('click', handleSignoutClick);
-                }, function(error) {
-                    console.error('Google API initialization error:', error);
-                    // Show error message to user
-                    document.getElementById('loginButton').innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Login Failed - Click to Retry';
-                });
-            });
-        }
+            // Add click handler for logout button (ensure it's only added once)
+            const logoutButton = document.getElementById('logoutButton');
+            if (logoutButton && !logoutButton.dataset.listenerAttached) {
+                logoutButton.addEventListener('click', handleSignoutClick);
+                logoutButton.dataset.listenerAttached = 'true'; // Mark as attached
+            }
 
-        // Update UI based on sign-in status
-        function updateSigninStatus(isSignedIn) {
-            if (isSignedIn) {
-                document.getElementById('loginScreen').classList.add('d-none');
-                document.getElementById('dashboard').classList.remove('d-none');
-                loadSheetData();
-                createStockChart(); // Create chart after login
+        }, function(error) { // This is the error callback for gapi.client.init
+            console.error('Google API initialization error. Full error object:', error);
+            
+            let detailedErrorMessage = 'Unknown error during API initialization.';
+            if (error && error.result && error.result.error) {
+                detailedErrorMessage = `Error: ${error.result.error.message} (Code: ${error.result.error.code}, Status: ${error.result.error.status})`;
+                console.error('Detailed error from Google API:', JSON.stringify(error.result.error, null, 2));
+            } else if (error && error.details) {
+                detailedErrorMessage = `Details: ${error.details}`;
+                console.error('Error details:', error.details);
+            } else if (error && error.error) { // GSIv2 might use error.error for some cases
+                 detailedErrorMessage = `Error: ${error.error}`;
             } else {
-                document.getElementById('loginScreen').classList.remove('d-none');
-                document.getElementById('dashboard').classList.add('d-none');
+                console.error('Error object (stringified):', JSON.stringify(error, null, 2));
             }
-        }
+            
+            const loginButton = document.getElementById('loginButton');
+            if (loginButton) {
+                 loginButton.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>Login Failed: ${detailedErrorMessage} - Click to Retry`;
+            }
+        });
+    });
+}
 
-        // Handle login
-        function handleAuthClick() {
-            gapi.auth2.getAuthInstance().signIn();
-        }
+// Update UI based on sign-in status
+function updateSigninStatus(isSignedIn) {
+    if (isSignedIn) {
+        document.getElementById('loginScreen').classList.add('d-none');
+        document.getElementById('dashboard').classList.remove('d-none');
+        loadSheetData();
+        createStockChart(); // Create chart after login
+    } else {
+        document.getElementById('loginScreen').classList.remove('d-none');
+        document.getElementById('dashboard').classList.add('d-none');
+    }
+}
 
-        // Handle logout
-        function handleSignoutClick() {
-            gapi.auth2.getAuthInstance().signOut();
-        }
+// Handle login
+function handleAuthClick() {
+    if (gapi && gapi.auth2 && gapi.auth2.getAuthInstance()) {
+        gapi.auth2.getAuthInstance().signIn();
+    } else {
+        console.error('Google Auth instance not ready for sign-in.');
+        alert('Google Authentication is not ready. Please try again in a moment.');
+    }
+}
 
-        // Load data from Google Sheet
-        function loadSheetData() {
-            gapi.client.sheets.spreadsheets.values.get({
-                spreadsheetId: CONFIG.spreadsheetId,
-                range: CONFIG.sheetName
-            }).then(function(response) {
-                const range = response.result;
-                if (range.values && range.values.length > 0) {
-                    console.log('Data loaded from Google Sheet:');
-                    console.log(range.values);
-                    // Process the data and update UI
-                    updateUIWithSheetData(range.values);
-                } else {
-                    console.log('No data found in Google Sheet');
+// Handle logout
+function handleSignoutClick() {
+    if (gapi && gapi.auth2 && gapi.auth2.getAuthInstance()) {
+        gapi.auth2.getAuthInstance().signOut();
+    } else {
+        console.error('Google Auth instance not ready for sign-out.');
+    }
+}
+
+// Load data from Google Sheet
+function loadSheetData() {
+    if (!gapi || !gapi.client || !gapi.client.sheets) {
+        console.error('Google Sheets API client not loaded. Cannot load data.');
+        return;
+    }
+    gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: CONFIG.spreadsheetId,
+        range: CONFIG.sheetName
+    }).then(function(response) {
+        const range = response.result;
+        if (range.values && range.values.length > 0) {
+            console.log('Data loaded from Google Sheet:');
+            console.log(range.values);
+            // Process the data and update UI
+            updateUIWithSheetData(range.values);
+        } else {
+            console.log('No data found in Google Sheet');
+        }
+    }, function(response) {
+        console.error('Error loading data from Google Sheet: ' + response.result.error.message);
+    });
+}
+
+// Update UI with data from Google Sheet
+function updateUIWithSheetData(data) {
+    // In a real implementation, you would update the UI with the data
+    console.log('Updating UI with sheet data (Placeholder). Data received:', data);
+    // Example: Update total items count (assuming first row is header, data starts from second)
+    // const totalItemsElement = document.querySelector('.stat-card.total h2');
+    // if (totalItemsElement && data.length > 1) {
+    //     totalItemsElement.textContent = data.length - 1; // Subtract 1 for header row
+    // }
+}
+
+// Create stock chart
+function createStockChart() {
+    const ctx = document.getElementById('stockChart').getContext('2d');
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js not loaded');
+        return;
+    }
+    
+    const gradient = ctx.createLinearGradient(0, 0, 0, 250);
+    gradient.addColorStop(0, 'rgba(67, 97, 238, 0.5)');
+    gradient.addColorStop(1, 'rgba(67, 97, 238, 0.1)');
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: { // This data should ideally come from your sheet
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            datasets: [{
+                label: 'Stock Levels',
+                data: [65, 59, 80, 81, 56, 72], // Placeholder data
+                backgroundColor: gradient,
+                borderColor: '#4361ee',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
                 }
-            }, function(response) {
-                console.error('Error loading data from Google Sheet: ' + response.result.error.message);
-            });
-        }
-
-        // Update UI with data from Google Sheet
-        function updateUIWithSheetData(data) {
-            // In a real implementation, you would update the UI with the data
-            console.log('Updating UI with sheet data');
-        }
-
-        // Create stock chart
-        function createStockChart() {
-            const ctx = document.getElementById('stockChart').getContext('2d');
-            if (typeof Chart === 'undefined') {
-                console.error('Chart.js not loaded');
-                return;
-            }
-            
-            const gradient = ctx.createLinearGradient(0, 0, 0, 250);
-            gradient.addColorStop(0, 'rgba(67, 97, 238, 0.5)');
-            gradient.addColorStop(1, 'rgba(67, 97, 238, 0.1)');
-            
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                    datasets: [{
-                        label: 'Stock Levels',
-                        data: [65, 59, 80, 81, 56, 72],
-                        backgroundColor: gradient,
-                        borderColor: '#4361ee',
-                        borderWidth: 2,
-                        tension: 0.3,
-                        fill: true
-                    }]
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
                 },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        }
+                x: {
+                    grid: {
+                        display: false
                     }
                 }
-            });
-        }
-
-        // Quantity controls
-        document.getElementById('increaseQty').addEventListener('click', function() {
-            const input = document.getElementById('orderQuantity');
-            input.value = parseInt(input.value) + 1;
-        });
-
-        document.getElementById('decreaseQty').addEventListener('click', function() {
-            const input = document.getElementById('orderQuantity');
-            if (parseInt(input.value) > 1) {
-                input.value = parseInt(input.value) - 1;
             }
-        });
+        }
+    });
+}
 
-        // Place order
-        document.getElementById('confirmOrder').addEventListener('click', function() {
-            const quantity = document.getElementById('orderQuantity').value;
-            alert(`Order placed for ${quantity} units! Stock will be updated.`);
-            
-            // In a real implementation, you would update the Google Sheet here
-            // updateStockInSheet(itemId, quantity);
-            
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('orderModal'));
-            modal.hide();
-        });
+// Quantity controls
+const increaseQtyButton = document.getElementById('increaseQty');
+const decreaseQtyButton = document.getElementById('decreaseQty');
+const orderQuantityInput = document.getElementById('orderQuantity');
 
-        // Search functionality
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            console.log(`Searching for: ${searchTerm}`);
-            // In a real implementation, you would filter the displayed items
-        });
+if (increaseQtyButton) {
+    increaseQtyButton.addEventListener('click', function() {
+        if (orderQuantityInput) orderQuantityInput.value = parseInt(orderQuantityInput.value) + 1;
+    });
+}
 
-        // Initialize Google API on load
-        window.addEventListener('load', function() {
-            // Load Google API script dynamically
-            const script = document.createElement('script');
-            script.src = 'https://apis.google.com/js/api.js';
-            script.onload = initGoogleAPI;
-            script.onerror = function() {
-                console.error('Failed to load Google API script');
-                document.getElementById('loginButton').innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Failed to Load - Click to Retry';
-                document.getElementById('loginButton').addEventListener('click', function() {
+if (decreaseQtyButton) {
+    decreaseQtyButton.addEventListener('click', function() {
+        if (orderQuantityInput && parseInt(orderQuantityInput.value) > 1) {
+            orderQuantityInput.value = parseInt(orderQuantityInput.value) - 1;
+        }
+    });
+}
+
+// Place order
+const confirmOrderButton = document.getElementById('confirmOrder');
+if (confirmOrderButton) {
+    confirmOrderButton.addEventListener('click', function() {
+        const quantity = orderQuantityInput ? orderQuantityInput.value : 'N/A';
+        alert(`Order placed for ${quantity} units! Stock will be updated (this is a placeholder).`);
+        
+        // In a real implementation, you would update the Google Sheet here
+        // updateStockInSheet(itemId, quantity);
+        
+        // Close modal
+        const orderModalElement = document.getElementById('orderModal');
+        if (orderModalElement) {
+            const modal = bootstrap.Modal.getInstance(orderModalElement);
+            if (modal) {
+                modal.hide();
+            }
+        }
+    });
+}
+
+// Search functionality
+const searchInput = document.getElementById('searchInput');
+if (searchInput) {
+    searchInput.addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        console.log(`Searching for: ${searchTerm} (Placeholder - filtering not implemented)`);
+        // In a real implementation, you would filter the displayed items
+    });
+}
+
+// Initialize Google API on load
+window.addEventListener('load', function() {
+    // Load Google API script dynamically
+    const script = document.createElement('script');
+    script.src = 'https://apis.google.com/js/api.js';
+    script.onload = initGoogleAPI; // Call initGoogleAPI after script is loaded
+    script.onerror = function() {
+        console.error('Failed to load Google API script (api.js). Network issue or script blocked?');
+        const loginButton = document.getElementById('loginButton');
+        if (loginButton) {
+            loginButton.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Failed to Load GAPI.js - Click to Retry';
+            // Add a way to retry loading, e.g., by reloading the page on click
+            if (!loginButton.dataset.retryListener) {
+                loginButton.addEventListener('click', function() {
                     window.location.reload();
                 });
-            };
-            document.head.appendChild(script);
-        });
+                loginButton.dataset.retryListener = 'true';
+            }
+        }
+    };
+    document.head.appendChild(script);
+});
     </script>
 </body>
 </html>
