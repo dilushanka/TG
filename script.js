@@ -185,7 +185,7 @@ function displayFilteredData() {
                         <h5 class="card-title">${item.model}</h5>
                         <p class="card-text"><strong>Variety:</strong> ${item.variety}</p>
                         <p class="card-text stock"><strong>Stock:</strong> <span id="stock-${item.rowId}">${item.stock}</span></p>
-                        <p class="card-text price"><strong>Price:</strong> ₹${item.price.toFixed(2)}</p>
+                        <p class="card-text price"><strong>Price:</strong> RS.${item.price.toFixed(2)}</p>
                         <button class="btn btn-info mt-auto" onclick='openOrderModal(${JSON.stringify(item)})' ${item.stock === 0 ? 'disabled' : ''}>${item.stock === 0 ? 'Out of Stock' : 'Place Order'}</button>
                     </div>
                 </div>

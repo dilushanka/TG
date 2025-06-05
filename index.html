@@ -11,10 +11,18 @@
     <div class="container mt-5">
         <h1 class="text-center mb-4">Tempered Glass Inventory</h1>
 
-        <div class="row mb-3">
-            <div class="col">
+        <div class="row mb-3 align-items-center">
+            <div class="col-auto">
                 <button id="authorize_button" class="btn btn-primary">Authorize Google Sheet Access</button>
                 <button id="signout_button" class="btn btn-danger" style="display:none;">Sign Out</button>
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="rememberMeCheck" checked>
+                    <label class="form-check-label" for="rememberMeCheck">
+                        Remember me (1 month)
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -42,13 +50,13 @@
                         <p><strong>Current Stock:</strong> <span id="modalCurrentStock"></span></p>
                         <p><strong>Price:</strong> ₹<span id="modalPrice"></span></p>
                         <div class="form-group">
-                            <label for="orderQuantity">Quantity to Add to Stock:</label>
+                            <label for="orderQuantity">Order Quantity (will reduce stock):</label>
                             <input type="number" class="form-control" id="orderQuantity" value="1" min="1">
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" id="confirmOrderButton">Confirm Order & Update Stock</button>
+                        <button type="button" class="btn btn-primary" id="confirmOrderButton">Confirm Order</button>
                     </div>
                 </div>
             </div>
