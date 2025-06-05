@@ -1,11 +1,14 @@
 const CONFIG = {
-    clientId: '80785123608-hebadvt7k7pcjnthnvkbtodc9i328le0.apps.googleusercontent.com', // Replace with your actual Client ID
-    spreadsheetId: '1okznadJPiXLygebie8jLStKPF6WUoDsrqqDAFogLS7o', // Replace with your Spreadsheet ID
-    apiKey: 'AIzaSyBtIb_OEZXjsex6BlPZsk35ISO3CVKV2io', // Replace with your API Key
-    sheetName: 'TG', // Make sure this is the name of your sheet
+    clientId: '80785123608-hebadvt7k7pcjnthnvkbtodc9i328le0.apps.googleusercontent.com', // Your actual Client ID
+    spreadsheetId: '1okznadJPiXLygebie8jLStKPF6WUoDsrqqDAFogLS7o', // Your Spreadsheet ID
+    apiKey: 'AIzaSyBtIb_OEZXjsex6BlPZsk35ISO3CVKV2io', // Your API Key
+    sheetName: 'TG',
     discoveryDocs: ["https://sheets.googleapis.com/$discovery/rest?version=v4"],
     scopes: "https://www.googleapis.com/auth/spreadsheets"
 };
+
+const REMEMBER_ME_KEY = 'tgStockRememberMeTimestamp';
+const REMEMBER_ME_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 let tokenClient;
 let gapiInited = false;
@@ -27,10 +30,10 @@ async function gisLoaded() {
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.clientId,
         scope: CONFIG.scopes,
-        callback: '', // defined later
+        callback: tokenResponseCallback, // Centralized callback
     });
     gisInited = true;
-    maybeEnableButtons();
+    maybeAttemptAutoLogin();
 }
 
 async function initializeGapiClient() {
@@ -39,29 +42,70 @@ async function initializeGapiClient() {
         discoveryDocs: CONFIG.discoveryDocs,
     });
     gapiInited = true;
-    maybeEnableButtons();
+    maybeAttemptAutoLogin();
 }
 
-function maybeEnableButtons() {
+function maybeAttemptAutoLogin() {
     if (gapiInited && gisInited) {
-        document.getElementById('authorize_button').style.visibility = 'visible';
+        const rememberMeTimestamp = localStorage.getItem(REMEMBER_ME_KEY);
+        if (rememberMeTimestamp && (Date.now() - parseInt(rememberMeTimestamp) < REMEMBER_ME_DURATION_MS)) {
+            // Attempt to get a token without user interaction
+            console.log("Attempting silent login...");
+            tokenClient.requestAccessToken({prompt: 'none'});
+        } else {
+            // No valid "remember me" state, show authorize button
+            document.getElementById('authorize_button').style.visibility = 'visible';
+            console.log("No valid 'remember me' state or expired. Manual authorization needed.");
+        }
     }
 }
 
-function handleAuthClick() {
-    tokenClient.callback = async (resp) => {
-        if (resp.error !== undefined) {
-            throw (resp);
-        }
+// Centralized callback for token responses
+async function tokenResponseCallback(resp) {
+    if (resp.error) {
+        // This can happen if prompt: 'none' fails, or user denies consent
+        console.warn("Token response error:", resp.error);
+        // If silent login fails, ensure authorize button is visible for manual login
+        document.getElementById('authorize_button').style.visibility = 'visible';
+        document.getElementById('authorize_button').innerText = 'Authorize Google Sheet Access';
+        document.getElementById('signout_button').style.display = 'none';
+        // Optionally clear localStorage if silent login specifically fails due to revoked consent etc.
+        // but be careful not to clear it if it's just a network error or momentary issue.
+        // For simplicity now, we just ensure the manual login path is available.
+        return;
+    }
+    try {
+        // Token received successfully
         document.getElementById('signout_button').style.display = 'block';
         document.getElementById('authorize_button').innerText = 'Refresh Data';
-        await listTemperedGlass();
-    };
+        document.getElementById('authorize_button').style.visibility = 'visible'; // Ensure it's visible if it was hidden
 
+        // If "Remember me" is checked (or by default if you don't have the checkbox)
+        const rememberMeCheckbox = document.getElementById('rememberMeCheck');
+        if (!rememberMeCheckbox || rememberMeCheckbox.checked) {
+            localStorage.setItem(REMEMBER_ME_KEY, Date.now().toString());
+            console.log("Login successful, 'remember me' timestamp updated.");
+        } else {
+            localStorage.removeItem(REMEMBER_ME_KEY); // User chose not to be remembered
+            console.log("Login successful, 'remember me' not set.");
+        }
+
+        await listTemperedGlass();
+    } catch (error) {
+        console.error("Error after receiving token:", error);
+        alert("An error occurred after authentication.");
+    }
+}
+
+
+function handleAuthClick() {
+    // If token is null, it will show consent. If token exists, it might just refresh.
+    // The `prompt` parameter in requestAccessToken can also be 'consent' to force re-consent.
     if (gapi.client.getToken() === null) {
         tokenClient.requestAccessToken({prompt: 'consent'});
     } else {
-        tokenClient.requestAccessToken({prompt: ''});
+        // If already has a token, can just re-request to ensure it's fresh or force data refresh
+        tokenClient.requestAccessToken({prompt: ''}); // Empty prompt can often refresh without full consent
     }
 }
 
@@ -69,10 +113,15 @@ function handleSignoutClick() {
     const token = gapi.client.getToken();
     if (token !== null) {
         google.accounts.oauth2.revoke(token.access_token, () => {
-            gapi.client.setToken('');
+            gapi.client.setToken(''); // Clear the GAPI client token
+            localStorage.removeItem(REMEMBER_ME_KEY); // Clear remember me state
+            console.log("'Remember me' state cleared on sign out.");
+
             document.getElementById('temperedGlassContainer').innerHTML = '';
             document.getElementById('authorize_button').innerText = 'Authorize Google Sheet Access';
+            document.getElementById('authorize_button').style.visibility = 'visible';
             document.getElementById('signout_button').style.display = 'none';
+            document.getElementById('searchBox').value = '';
             allTemperedGlassData = [];
             alert("You have been signed out.");
         });
@@ -88,13 +137,15 @@ async function listTemperedGlass() {
             range: range,
         });
     } catch (err) {
-        console.error("Error fetching data: ", err.result.error.message);
-        alert("Error fetching data from Google Sheet: " + err.result.error.message);
+        console.error("Error fetching data: ", err.result ? err.result.error.message : err.message);
+        alert("Error fetching data from Google Sheet: " + (err.result ? err.result.error.message : err.message));
+        // If data fetch fails after auth, ensure user can try again or sign out.
+        document.getElementById('authorize_button').innerText = 'Refresh Data Failed - Retry';
         return;
     }
     const rangeValues = response.result.values;
     if (!rangeValues || rangeValues.length == 0) {
-        document.getElementById('temperedGlassContainer').innerHTML = '<p class="col">No data found.</p>';
+        document.getElementById('temperedGlassContainer').innerHTML = '<p class="col">No data found in sheet.</p>';
         allTemperedGlassData = [];
         return;
     }
@@ -135,7 +186,7 @@ function displayFilteredData() {
                         <p class="card-text"><strong>Variety:</strong> ${item.variety}</p>
                         <p class="card-text stock"><strong>Stock:</strong> <span id="stock-${item.rowId}">${item.stock}</span></p>
                         <p class="card-text price"><strong>Price:</strong> ₹${item.price.toFixed(2)}</p>
-                        <button class="btn btn-info mt-auto" onclick='openOrderModal(${JSON.stringify(item)})'>Place Order</button>
+                        <button class="btn btn-info mt-auto" onclick='openOrderModal(${JSON.stringify(item)})' ${item.stock === 0 ? 'disabled' : ''}>${item.stock === 0 ? 'Out of Stock' : 'Place Order'}</button>
                     </div>
                 </div>
             </div>
@@ -145,15 +196,18 @@ function displayFilteredData() {
 }
 
 function openOrderModal(item) {
+    if (item.stock === 0) {
+        alert("This item is out of stock.");
+        return;
+    }
     selectedTemperedGlassForOrder = item;
     document.getElementById('modalModelName').textContent = item.model;
     document.getElementById('modalVariety').textContent = item.variety;
     document.getElementById('modalCurrentStock').textContent = item.stock;
     document.getElementById('modalPrice').textContent = item.price.toFixed(2);
-    // Update the label for the quantity input
     document.querySelector('#orderModal .form-group label[for="orderQuantity"]').textContent = 'Order Quantity (will reduce stock):';
     document.getElementById('orderQuantity').value = 1;
-    document.getElementById('orderQuantity').max = item.stock; // Prevent ordering more than available
+    document.getElementById('orderQuantity').max = item.stock;
     $('#orderModal').modal('show');
 }
 
@@ -171,12 +225,11 @@ async function handleConfirmOrder() {
     }
 
     if (quantityOrdered > selectedTemperedGlassForOrder.stock) {
-        alert("Cannot order more than available stock.");
+        alert("Cannot order more than available stock. Please refresh data if you believe this is an error.");
         return;
     }
 
     const currentStock = selectedTemperedGlassForOrder.stock;
-    // **FIX: Change from addition to subtraction**
     const newStock = currentStock - quantityOrdered;
 
     const updateRange = `${CONFIG.sheetName}!C${selectedTemperedGlassForOrder.rowId}`;
@@ -194,22 +247,22 @@ async function handleConfirmOrder() {
         console.log('Sheet updated successfully:', response);
         alert(`Order placed for ${quantityOrdered} of ${selectedTemperedGlassForOrder.model} (${selectedTemperedGlassForOrder.variety}). Stock updated. New stock: ${newStock}`);
 
+        // Update UI immediately
         document.getElementById(`stock-${selectedTemperedGlassForOrder.rowId}`).textContent = newStock;
-        selectedTemperedGlassForOrder.stock = newStock;
-        document.getElementById('modalCurrentStock').textContent = newStock;
-        document.getElementById('orderQuantity').max = newStock; // Update max for modal if re-opened
+        selectedTemperedGlassForOrder.stock = newStock; // Update local cache
+        document.getElementById('modalCurrentStock').textContent = newStock; // Update modal if it were re-opened
+        document.getElementById('orderQuantity').max = newStock; // Update max in modal
 
-
+        // Update the master data list and re-render the specific card or all cards
         const itemInAllData = allTemperedGlassData.find(item => item.rowId === selectedTemperedGlassForOrder.rowId);
         if (itemInAllData) {
             itemInAllData.stock = newStock;
         }
-        // Optional: re-render to disable button if stock is 0
-        // displayFilteredData();
+        displayFilteredData(); // Re-render to update button state (e.g., disable if stock is 0)
 
     } catch (err) {
-        console.error("Error updating sheet: ", err.result.error.message);
-        alert("Error updating stock in Google Sheet: " + err.result.error.message);
+        console.error("Error updating sheet: ", err.result ? err.result.error.message : err.message);
+        alert("Error updating stock in Google Sheet: " + (err.result ? err.result.error.message : err.message));
     }
 
     $('#orderModal').modal('hide');
